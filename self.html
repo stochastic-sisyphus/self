@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Concept Map</title>
+    <!-- D3.js Library -->
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <!-- html2canvas for PNG Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Additional Libraries for Accessibility and Enhancements -->
+    <style>
+        /* Root Color Variables */
+        :root {
+            --ghost-white: #edeff5ff;
+            --lavender-web: #d9dbf2ff;
+            --cool-gray: #8d99aeff;
+            --paynes-gray: #5a6c90ff;
+            --paynes-gray-2: #3e5c76ff;
+            --midnight-green: #124559ff;
+            --prussian-blue: #023047ff;
+            --prussian-blue-2: #06253cff;
+            --highlight-color: #183949;
+            --sidebar-bg: var(--lavender-web);
+            --tooltip-bg: rgba(0, 0, 0, 0.8);
+            --tooltip-color: #fff;
+            --button-bg: var(--prussian-blue);
+            --button-hover-bg: var(--midnight-green);
+            --border-radius: 8px;
+        }
+
+        /* Global Styles */
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            overflow: hidden; 
+            position: relative;
+            background-color: var(--ghost-white);
+        }
+
+        svg { 
+            width: 100vw; 
+            height: 100vh; 
+            z-index: 1;
+        }
+
+        /* Legend Styling */
+        #legend {
+            position: absolute;
+            top: 20px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1001; /* Same as search */
+            width: 220px; /* Fixed width */
+        }
+
+        #legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        #legend-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* Legend Item Hover Effect */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 4px 8px;
+            line-height: 1.4;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .legend-item:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .legend-text {
+            font-size: 14px;
+            color: #333;
+            white-space: normal; /* Allow text to wrap */
+            flex-grow: 1;
+        }
+
+        @media (max-width: 768px) {
+            #legend {
+                width: 180px;
+            }
+        }
+
+        /* Tooltip Styling */
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 10px;
+            font: 12px sans-serif;
+            background: var(--tooltip-bg);
+            color: var(--tooltip-color);
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 200px;
+            z-index: 1002; /* Same as sidebar */
+        }
+
+        /* Node and Link Styling */
+        .link { 
+            stroke: var(--cool-gray); 
+            stroke-opacity: 0.7; 
+            stroke-width: 1.5px; 
+            transition: stroke-opacity 0.3s;
+        }
+
+        .link:hover {
+            stroke-opacity: 1;
+        }
+
+        .node {
+            stroke: #fff;
+            stroke-width: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 3px rgba(0,0,0,0.2));
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        .node:hover {
+            stroke: #183949;
+            stroke-width: 3px;
+            filter: drop-shadow(0 0 5px rgba(24,57,73,0.3));
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .node.important {
+            filter: drop-shadow(0 0 8px rgba(24,57,73,0.4));
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .node.readme {
+            filter: drop-shadow(0 0 12px rgba(24,57,73,0.6));
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            stroke: #183949;
+            stroke-width: 4px;
+        }
+
+        /* Hover Label Styling */
+        .hover-label {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            font-weight: bold;
+            fill: #000;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 300px;
+            height: 100%;
+            background-color: var(--sidebar-bg);
+            box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+            padding: 20px;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+            z-index: 1002; /* Higher than search container */
+        }
+
+        .sidebar.active {
+            transform: translateX(0);
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* Search Bar Styling */
+        #search-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001; /* Higher than base visualization */
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        #search-input {
+            padding: 5px;
+            font-size: 14px;
+            width: 200px;
+        }
+
+        #search-button {
+            padding: 5px 10px;
+            font-size: 14px;
+            margin-left: 5px;
+            cursor: pointer;
+            background-color: var(--button-bg);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        #search-button:hover {
+            background-color: var(--button-hover-bg);
+        }
+
+        /* Zoom Controls Styling */
+        #zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 5;
+        }
+
+        #zoom-controls button {
+            padding: 5px 10px;
+            margin: 0 2px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--button-bg);
+            color: #fff;
+            transition: background-color 0.2s;
+        }
+
+        #zoom-controls button:hover {
+            background-color: var(--button-hover-bg);
+        }
+
+        /* Export Controls - Fixed positioning and styling */
+        #export-controls {
+            position: absolute;
+            bottom: 120px; /* Much higher above zoom controls */
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 3px;
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            z-index: 5;
+            display: inline-flex;
+            gap: 3px;
+            width: auto;
+            height: 24px;
+        }
+
+        #export-controls button {
+            padding: 2px 6px;
+            font-size: 11px;
+            cursor: pointer;
+            border: 1px solid var(--button-bg);
+            border-radius: 3px;
+            background-color: var(--button-bg);
+            color: #fff;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+            height: 18px;
+            line-height: 14px;
+            margin: 0;
+        }
+
+        /* Ensure zoom controls stay at bottom */
+        #zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            z-index: 5;
+        }
+
+        /* Matched Nodes List Styling */
+        #matched-nodes {
+            position: absolute;
+            bottom: 60px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 5;
+            display: none; /* Hidden by default */
+        }
+
+        #matched-nodes h4 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        #matched-nodes ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #matched-nodes li {
+            padding: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #matched-nodes li:hover {
+            background-color: var(--cool-gray);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            #legend, #search-container, #zoom-controls, #export-controls, #matched-nodes {
+                width: 80%;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            #search-input {
+                width: 150px;
+            }
+        }
+
+        /* Combined Controls Styling */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        #export-options {
+            display: flex;
+            gap: 3px;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 3px;
+            border-radius: 4px;
+        }
+
+        #export-options button {
+            padding: 2px 6px;
+            font-size: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+            background-color: var(--button-bg);
+            color: #fff;
+            transition: background-color 0.2s;
+            height: 18px;
+            line-height: 14px;
+        }
+
+        #zoom-buttons {
+            display: flex;
+            gap: 3px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 3px;
+            border-radius: 4px;
+        }
+
+        #zoom-buttons button {
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+            background-color: var(--button-bg);
+            color: #fff;
+            transition: background-color 0.2s;
+        }
+
+        #controls button:hover {
+            background-color: var(--button-hover-bg);
+        }
+
+        #github-footer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #1a1a1a;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            z-index: 1003; /* Highest z-index */
+            width: auto;
+            height: auto;
+        }
+
+        #github-footer:hover {
+            background-color: #2a2a2a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        #github-footer a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            width: auto;
+        }
+
+        .github-icon {
+            fill: currentColor;
+            min-width: 24px;
+            min-height: 24px;
+            width: 24px;
+            height: 24px;
+        }
+
+        @media (max-width: 768px) {
+            #github-footer {
+                bottom: 10px;
+                right: 10px;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Legend -->
+    <div id="legend" role="region" aria-labelledby="legend-title">
+        <h4 id="legend-title">Legend</h4>
+        <ul id="legend-list">
+            <!-- Legend items will be populated by JavaScript -->
+        </ul>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+    <!-- Information Sidebar -->
+    <div id="info-sidebar" class="sidebar" role="complementary" aria-labelledby="info-title">
+        <span id="close-sidebar" class="close-btn" role="button" aria-label="Close Sidebar" tabindex="0">&times;</span>
+        <h2 id="info-title">Node Information</h2>
+        <p id="info-content">Click on a node to see details here.</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div id="search-container" role="search">
+        <input type="text" id="search-input" placeholder="Search for a node..." aria-label="Search for a node" />
+        <button id="search-button" aria-label="Search Button">Search</button>
+    </div>
+
+    <!-- Matched Nodes List -->
+    <div id="matched-nodes" role="region" aria-labelledby="matched-nodes-title">
+        <h4 id="matched-nodes-title">Matched Nodes</h4>
+        <ul id="matched-list">
+            <!-- Matched nodes will be listed here -->
+        </ul>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls" role="region" aria-label="Visualization Controls">
+        <!-- Export options -->
+        <div id="export-options">
+            <button id="export-png">PNG</button>
+            <button id="export-svg">SVG</button>
+        </div>
+        <!-- Zoom controls -->
+        <div id="zoom-buttons">
+            <button id="zoom-out" aria-label="Zoom Out">-</button>
+            <button id="zoom-in" aria-label="Zoom In">+</button>
+            <button id="reset-zoom" aria-label="Reset Zoom">Reset</button>
+        </div>
+    </div>
+
+    <!-- SVG Container -->
+    <svg role="img" aria-label="Interactive Concept Map"></svg>
+
+    <script>
+        /*******************************
+         * Concept Map Interactive Script
+         *******************************/
+
+        // Define your custom color palette
+        const colors = [
+            "#edeff5ff", // --ghost-white
+            "#d9dbf2ff", // --lavender-web
+            "#8d99aeff", // --cool-gray
+            "#5a6c90ff", // --paynes-gray
+            "#3e5c76ff", // --paynes-gray-2
+            "#124559ff", // --midnight-green
+            "#023047ff", // --prussian-blue
+            "#06253cff"  // --prussian-blue-2
+        ];
+
+        // Extend the color range to accommodate 23 groups
+        const extendedColors = d3.range(23).map(i => colors[i % colors.length]);
+
+        const color = d3.scaleOrdinal()
+                        .domain(d3.range(1, 24)) // Groups 1 to 23
+                        .range(extendedColors);
+
+        // Define shapes for each group
+        const shapeTypes = d3.scaleOrdinal()
+            .domain(d3.range(1, 24))
+            .range([
+                "circle", "circle", "rect", "triangle", "diamond",
+                "circle", "rect", "triangle", "diamond", "circle",
+                "rect", "triangle", "diamond", "circle", "rect",
+                "triangle", "diamond", "circle", "rect", "triangle",
+                "diamond", "circle", "rect"
+            ]);
+
+        // Define group names
+        const groupNames = {
+            0: "README.self", // Add README.self as group 0
+            1: "Digital Wizardry",
+            2: "Programming Playground",
+            3: "Algorithm Arsenal",
+            4: "Developer's Dojo",
+            5: "Cloud Constellation",
+            6: "Data Dynasty",
+            7: "Tech Toolsmith",
+            8: "Philosophical Frontiers",
+            9: "Emergence & Evolution",
+            10: "Neural Narratives",
+            11: "Theory Forge",
+            12: "Empirical Wit",
+            13: "Data Dramaturgy",
+            14: "Mindscape & Methods",
+            15: "Collaborative Dynamics",
+            16: "Digital Dissertations",
+            17: "Life Laboratory",
+            18: "Curiosity Cabinet",
+            19: "Pipeline Poetry",
+            20: "Visual Ventures",
+            21: "Human Algorithm",
+            22: "Future Frontiers",
+            23: "Method Matrix"
+        };
+
+        // Define the nodes and links data
+        const data = {
+            "nodes": [
+                // **README.self Node**
+                { 
+                    "id": "README.self", 
+                    "group": 1, 
+                    "description": "Vanessa Beck, MSBA\n@stochastic-sisyphus\n\nLinks:\n• GitHub: github.com/stochastic-sisyphus\n• All of the Links: bento.me/stochastic-sisyphus\n• LinkedIn: linkedin.com/in/vanessa-b-msba\n• ORCID: orcid.org/0009-0008-6611-535X", 
+                    "quotes": ["If the machine learns, then why do I have to supervise it?"],
+                    "size": 3
+                },
+
+                // **Technical Skills Group (Group 1)**
+                { "id": "Machine Learning", "group": 1, "description": "A method of data analysis that automates analytical model building." },
+                { "id": "Deep Learning", "group": 1, "description": "A subset of machine learning involving neural networks with many layers." },
+                { "id": "Natural Language Processing (NLP)", "group": 1, "description": "Techniques for the interaction between computers and human language." },
+                { "id": "Transformers", "group": 1, "description": "A type of model architecture used in NLP for handling sequential data." },
+                { "id": "Causal Inference", "group": 1, "description": "Statistical methods to determine cause-effect relationships." },
+                { "id": "Reinforcement Learning", "group": 1, "description": "An area of machine learning where agents take actions to maximize cumulative reward." },
+                { "id": "AutoML", "group": 1, "description": "Automated machine learning processes to streamline model development." },
+                { "id": "Bayesian Methods", "group": 1, "description": "Statistical methods that apply Bayes' theorem for updating probabilities." },
+                { "id": "Statistics", "group": 1, "description": "The science of collecting, analyzing, interpreting, and presenting data." },
+                { "id": "Predictive Analytics", "group": 1, "description": "Techniques that use historical data to predict future outcomes." },
+                { "id": "Time Series Forecasting", "group": 1, "description": "Predicting future values based on previously observed values in time-ordered data." },
+                { "id": "Ensemble Methods", "group": 1, "description": "Techniques that combine multiple models to improve prediction accuracy." },
+                { "id": "Feature Engineering", "group": 1, "description": "The process of selecting and transforming variables to improve model performance." },
+                { "id": "Exploratory Data Analysis (EDA)", "group": 1, "description": "Analyzing data sets to summarize their main characteristics." },
+                { "id": "Data Cleaning", "group": 1, "description": "The process of detecting and correcting (or removing) corrupt or inaccurate records." },
+                { "id": "Data Transformation", "group": 1, "description": "Changing the format, structure, or values of data." },
+                { "id": "Generative Adversarial Networks (GANs)", "group": 1, "description": "A class of machine learning frameworks where two neural networks contest with each other." },
+                { "id": "Transfer Learning", "group": 1, "description": "A machine learning method where a model developed for a task is reused as the starting point for a model on a second task." },
+                { "id": "Recurrent Neural Networks (RNNs)", "group": 1, "description": "A class of neural networks where connections between nodes form directed cycles." },
+
+                // **Programming Languages Group (Group 2)**
+                { "id": "Python", "group": 2, "description": "A versatile programming language used for web development, data analysis, AI, and more." },
+                { "id": "SQL", "group": 2, "description": "A domain-specific language used in programming for managing relational databases." },
+                { "id": "R", "group": 2, "description": "A language and environment for statistical computing and graphics." },
+                { "id": "TypeScript", "group": 2, "description": "A superset of JavaScript that adds static typing." },
+                { "id": "Shell (Bash)", "group": 2, "description": "A Unix shell and command language for interacting with the operating system." },
+                { "id": "CSS", "group": 2, "description": "A style sheet language used for describing the presentation of a document written in HTML." },
+                { "id": "HTML", "group": 2, "description": "The standard markup language for documents designed to be displayed in a web browser." },
+                { "id": "JavaScript", "group": 2, "description": "A high-level, interpreted programming language used to create interactive effects within web browsers." },
+                { "id": "Jupyter Notebook", "group": 2, "description": "An open-source web application that allows you to create and share documents with live code." },
+                { "id": "TXT", "group": 2, "description": "A standard text file format with no formatting." },
+                { "id": "Markdown", "group": 2, "description": "A lightweight markup language with plain text formatting syntax." },
+                { "id": "Docker", "group": 2, "description": "A platform for developing, shipping, and running applications in containers." },
+                { "id": "Makefile", "group": 2, "description": "A file containing a set of directives used by the `make` build automation tool." },
+
+                // **Libraries & Frameworks Group (Group 3)**
+                { "id": "Pandas", "group": 3, "description": "A Python library providing high-performance, easy-to-use data structures and data analysis tools." },
+                { "id": "NumPy", "group": 3, "description": "A fundamental package for scientific computing with Python, providing support for arrays and matrices." },
+                { "id": "Scikit-learn", "group": 3, "description": "A machine learning library for Python, offering tools for data mining and data analysis." },
+                { "id": "TensorFlow", "group": 3, "description": "An open-source library for machine learning and artificial intelligence." },
+                { "id": "PyTorch", "group": 3, "description": "An open-source machine learning library based on the Torch library." },
+                { "id": "Keras", "group": 3, "description": "An open-source software library that provides a Python interface for neural networks." },
+                { "id": "NLTK", "group": 3, "description": "A leading platform for building Python programs to work with human language data." },
+                { "id": "Hugging Face", "group": 3, "description": "A company providing tools for building and deploying machine learning models." },
+                { "id": "Matplotlib", "group": 3, "description": "A plotting library for the Python programming language and its numerical mathematics extension NumPy." },
+                { "id": "Seaborn", "group": 3, "description": "A Python data visualization library based on matplotlib." },
+                { "id": "Langchain", "group": 3, "description": "A framework for building applications with large language models." },
+                { "id": "XGBoost", "group": 3, "description": "An optimized distributed gradient boosting library designed to be highly efficient and flexible." },
+                { "id": "Random Forest", "group": 3, "description": "An ensemble learning method for classification and regression." },
+
+                // **Development Environments Group (Group 4)**
+                { "id": "VSCode", "group": 4, "description": "A free source-code editor made by Microsoft for Windows, Linux and macOS." },
+                { "id": "Jupyter Notebooks", "group": 4, "description": "An open-source web application that allows you to create and share documents with live code." },
+                { "id": "Google Colab", "group": 4, "description": "A free Jupyter notebook environment that runs entirely in the cloud." },
+                { "id": "Git/GitHub", "group": 4, "description": "Version control systems for tracking changes in source code during software development." },
+                { "id": "Repl.it", "group": 4, "description": "An online IDE, editor, and compiler that allows users to write and run code in various programming languages." },
+
+                // **Cloud Platforms Group (Group 5)**
+                { "id": "Vertex AI Studio", "group": 5, "description": "A managed machine learning platform by Google Cloud." },
+                { "id": "Dify", "group": 5, "description": "A platform for building and deploying machine learning models." },
+                { "id": "Replicate", "group": 5, "description": "A platform for running machine learning models in the cloud." },
+                { "id": "Groq", "group": 5, "description": "A company providing hardware and software solutions for machine learning workloads." },
+                { "id": "Helicon", "group": 5, "description": "A cloud-based platform for deploying AI models." },
+                { "id": "AWS S3", "group": 5, "description": "Amazon Web Services' Simple Storage Service for scalable object storage." },
+                { "id": "Google Cloud Storage", "group": 5, "description": "A service for storing and accessing your data on Google's infrastructure." },
+                { "id": "HDFS", "group": 5, "description": "The Hadoop Distributed File System, designed to store large data sets reliably." },
+
+                // **Database Management Group (Group 6)**
+                { "id": "MongoDB", "group": 6, "description": "A source-available cross-platform document-oriented database program." },
+                { "id": "NoSQL", "group": 6, "description": "A class of database management systems that do not follow all the rules of traditional relational databases." },
+                { "id": "SQL Database", "group": 6, "description": "A database structured to recognize relations among stored items of information." },
+
+                // **Software Tools Group (Group 7)**
+                { "id": "DeepNote", "group": 7, "description": "A collaborative data science notebook." },
+                { "id": "Voila", "group": 7, "description": "A tool to turn Jupyter notebooks into standalone web applications." },
+                { "id": "Streamlit", "group": 7, "description": "An open-source app framework for Machine Learning and Data Science teams." },
+                { "id": "GraphRAG by Microsoft", "group": 7, "description": "A tool by Microsoft for creating graph-based retrieval augmented generation models." },
+
+                // **Philosophical Interests Group (Group 8)**
+                { "id": "Philosophy", "group": 8, "description": "The study of fundamental questions about existence, knowledge, values, reason, mind, and language." },
+                { "id": "Absurdism", "group": 8, "description": "A philosophy stating that the efforts of humanity to find inherent meaning will ultimately fail." },
+                { "id": "Existentialism", "group": 8, "description": "A philosophy focusing on individual freedom, choice, and existence." },
+                { "id": "Sisyphus", "group": 8, "description": "A figure in Greek mythology condemned to repeat an eternally futile task." },
+                { "id": "Recursive Thinking", "group": 8, "description": "A thought process that involves applying the same rules or operations repeatedly." },
+                { "id": "Cognitive Dissonance", "group": 8, "description": "The mental discomfort experienced by a person who holds contradictory beliefs or values." },
+                { "id": "Phenomenology", "group": 8, "description": "The philosophical study of the structures of experience and consciousness." },
+                { "id": "Epistemology", "group": 8, "description": "The study of knowledge, its nature, and validity." },
+                { "id": "Panpsychism", "group": 8, "description": "The view that consciousness, mind, or soul is a universal and primordial feature of all things." },
+                { "id": "Technological Determinism", "group": 8, "description": "The theory that technology is an independent variable that shapes society." },
+                { "id": "Existential Risk", "group": 8, "description": "Risks that threaten the entire future of humanity." },
+
+                // **Complexity Science Group (Group 9)**
+                { "id": "Complexity Science", "group": 9, "description": "An interdisciplinary field that studies complex systems and problems." },
+                { "id": "Chaos Theory", "group": 9, "description": "A branch of mathematics focusing on systems that are highly sensitive to initial conditions." },
+                { "id": "Emergent Phenomena", "group": 9, "description": "Complex patterns arising from simple interactions." },
+                { "id": "Fractal Geometry", "group": 9, "description": "The study of shapes that display self-similarity at various scales." },
+                { "id": "Self-Organizing Systems", "group": 9, "description": "Systems that organize themselves without external direction." },
+                { "id": "Agent-Based Modeling", "group": 9, "description": "Simulations that model the interactions of autonomous agents to assess their effects on the system." },
+                { "id": "System Dynamics", "group": 9, "description": "A methodology for understanding the behavior of complex systems over time." },
+                { "id": "Entropy", "group": 9, "description": "A measure of disorder or randomness in a system." },
+                { "id": "Collective Intelligence", "group": 9, "description": "Shared or group intelligence that emerges from collaboration among individuals." },
+
+                // **AI and Algorithms Group (Group 10)**
+                { "id": "AI Alignment", "group": 10, "description": "Ensuring AI systems' goals and behaviors align with human values." },
+                { "id": "Meta-Learning", "group": 10, "description": "A subfield of machine learning where models learn to learn." },
+                { "id": "Explainability", "group": 10, "description": "Making the behavior and decisions of AI systems understandable to humans." },
+                { "id": "Neuro-Symbolic AI", "group": 10, "description": "Integrating neural networks with symbolic reasoning." },
+                { "id": "Algorithmic Ethics", "group": 10, "description": "The study of moral implications of algorithms and AI systems." },
+                { "id": "Superintelligence", "group": 10, "description": "An intelligence that surpasses the brightest and most gifted human minds." },
+                { "id": "Recursive Self-Improvement", "group": 10, "description": "An AI system improving itself iteratively." },
+                { "id": "Machine Consciousness", "group": 10, "description": "Theoretical understanding of consciousness in machines." },
+                { "id": "Quantum Heuristics", "group": 10, "description": "Heuristic algorithms that utilize principles of quantum computing." },
+                { "id": "Self-Organizing Algorithms", "group": 10, "description": "Algorithms that organize themselves based on data or interactions." },
+                { "id": "Cognitive Resonance in AI", "group": 10, "description": "AI systems that resonate with human cognitive processes." },
+                { "id": "Algorithmic Dualism", "group": 10, "description": "The separation of algorithms into distinct operational parts." },
+
+                // **Theoretical Exploration Group (Group 11)**
+                { "id": "Computational Aesthetics", "group": 11, "description": "The study of aesthetic features of algorithms and computational processes." },
+                { "id": "Synthetic Imagination in AI", "group": 11, "description": "AI's ability to generate novel and creative ideas." },
+                { "id": "Symbolic Emergence", "group": 11, "description": "The emergence of symbolic representations from complex systems." },
+                { "id": "Hierarchical Reinforcement Learning", "group": 11, "description": "Reinforcement learning with a hierarchy of goals or tasks." },
+                { "id": "Evolutionary Dynamics in AI", "group": 11, "description": "Applying evolutionary principles to the development of AI systems." },
+                { "id": "Algorithmic Symmetry", "group": 11, "description": "Symmetrical properties within algorithmic structures." },
+                { "id": "Artificial Curiosity", "group": 11, "description": "AI systems designed to exhibit curiosity-driven behaviors." },
+                { "id": "Quantum Heuristic Algorithms", "group": 11, "description": "Algorithms that use quantum mechanics principles for heuristic solutions." },
+                { "id": "Chaotic Neural Networks", "group": 11, "description": "Neural networks exhibiting chaotic dynamics." },
+                { "id": "Automated Theory Generation", "group": 11, "description": "AI systems generating scientific theories autonomously." },
+                { "id": "Aesthetic-Driven Neural Networks", "group": 11, "description": "Neural networks optimized for aesthetic outputs." },
+                { "id": "Predictive Linguistics", "group": 11, "description": "Using predictive models to understand and generate language." },
+                { "id": "High-Order Neural Interactions", "group": 11, "description": "Complex interactions within neural network layers." },
+                { "id": "Personalized Reality Simulation", "group": 11, "description": "AI-driven simulations tailored to individual user experiences." },
+                { "id": "Semantic Fusion", "group": 11, "description": "Combining semantic information from different sources." },
+                { "id": "Conceptual Blending in AI", "group": 11, "description": "AI's ability to blend different concepts creatively." },
+                { "id": "Consciousness Mapping in AI", "group": 11, "description": "Mapping human consciousness features onto AI systems." },
+                { "id": "Data Density Algorithms", "group": 11, "description": "Algorithms optimized for high-density data processing." },
+                { "id": "Fictional Narrative Simulation in AI", "group": 11, "description": "AI systems simulating fictional narratives." },
+                { "id": "Multi-Agent Collective Learning", "group": 11, "description": "Multiple AI agents learning collectively to solve problems." },
+                { "id": "Algorithmic Relativity", "group": 11, "description": "The concept that algorithm behavior can vary based on context." },
+                { "id": "AI Model of Cognitive Dissonance", "group": 11, "description": "AI models simulating cognitive dissonance phenomena." },
+                { "id": "Meta-Interpretation in AI", "group": 11, "description": "AI's ability to interpret its own interpretations." },
+                { "id": "Dream Simulation in AI", "group": 11, "description": "AI systems simulating dream-like scenarios." },
+                { "id": "Algorithmic Propensity", "group": 11, "description": "The inherent tendency of algorithms to behave in certain ways." },
+                { "id": "Context Awareness", "group": 11, "description": "AI's ability to understand and utilize contextual information." },
+
+                // **Personal Branding & Humor Group (Group 12)**
+                { "id": "Personal Branding (Group 12)", "group": 12, "description": "Developing a unique professional identity and image." },
+                { "id": "Humor in AI", "group": 12, "description": "Incorporating humor into AI interactions." },
+                { "id": "Existential Humor", "group": 12, "description": "Humorous content that reflects on existence and meaning." },
+                { "id": "Witty Hooks", "group": 12, "description": "Clever and engaging opening statements or ideas." },
+                { "id": "Prolific Jester (Group 12)", "group": 12, "description": "A persona embodying humor and creativity." },
+                { "id": "Existential Quest", "group": 12, "description": "A journey to explore existential questions." },
+                { "id": "Playful Banter with the Abyss", "group": 12, "description": "Engaging in light-hearted conversations about deep topics." },
+                { "id": "Banter with the Void", "group": 12, "description": "Conversing humorously about the unknown or emptiness." },
+                { "id": "Jestful Archive of Existential Absurdity", "group": 12, "description": "A collection of humorous takes on absurd existential themes." },
+                { "id": "The Written Jest of a Stochastic Exile", "group": 12, "description": "Humorous writings from an unpredictable outsider." },
+                { "id": "Jesting at the Edge of the Abyss", "group": 12, "description": "Humorous exploration of the boundaries of existence." },
+                { "id": "A Jester's Journey to the Abyss", "group": 12, "description": "A humorous narrative about venturing into the unknown." },
+                { "id": "Prolific Jests from My Existential Quest", "group": 12, "description": "A collection of humorous insights from a journey into existence." },
+
+                // **Data-Driven Insights Group (Group 13)**
+                { "id": "Data-Driven Insights", "group": 13, "description": "Insights derived from analyzing data patterns and trends." },
+                { "id": "Data Mysticism", "group": 13, "description": "The enigmatic and almost magical understanding of data." },
+                { "id": "Correlation", "group": 13, "description": "A statistical measure that describes the extent to which two variables change together." },
+                { "id": "Causation", "group": 13, "description": "A relationship where one event causes another." },
+                { "id": "Overfitting", "group": 13, "description": "When a model learns the training data too well, including noise." },
+                { "id": "P-hacking", "group": 13, "description": "Manipulating data or analysis until nonsignificant results become significant." },
+                { "id": "Confusion Matrix", "group": 13, "description": "A table used to describe the performance of a classification model." },
+                { "id": "Model Performance", "group": 13, "description": "Metrics used to evaluate how well a model performs on data." },
+                { "id": "Data Analysis", "group": 13, "description": "The process of inspecting, cleansing, transforming, and modeling data." },
+                { "id": "Predictive Modeling", "group": 13, "description": "Using statistics to predict outcomes." },
+
+                // **Personal Attributes & Philosophy Group (Group 14)**
+                { "id": "Curiosity", "group": 14, "description": "A strong desire to know or learn something." },
+                { "id": "Intellectual Freedom", "group": 14, "description": "The right to think freely and express ideas without censorship." },
+                { "id": "Authenticity", "group": 14, "description": "Being genuine and true to one's own personality or spirit." },
+                { "id": "Mastery", "group": 14, "description": "Comprehensive knowledge or skill in a subject or activity." },
+                { "id": "Perfectionism", "group": 14, "description": "The refusal to accept any standard short of perfection." },
+                { "id": "Existential Contemplation", "group": 14, "description": "Deep thinking about existence and purpose." },
+                { "id": "Philosophical Depth haha I'm so deep", "group": 14, "description": "Profound and insightful understanding of philosophical concepts." },
+                { "id": "Intellectual Independence because I'm so smart and unique", "group": 14, "description": "The ability to think and reason autonomously." },
+                { "id": "Structured Chaos Navigator aka ADHD", "group": 14, "description": "Someone who navigates complex and unpredictable environments effectively." },
+                { "id": "Me: on computer at desk", "group": 14, "description": "An introvert who performs exceptionally well in their pursuits." },
+                { "id": "Polymathic Thinker", "group": 14, "description": "A thinker with knowledge spanning a significant number of subjects." },
+                { "id": "Van B or Van Gogh? Both are Creative Visionaries", "group": 14, "description": "Someone with imaginative foresight and innovative ideas." },
+                { "id": "Sharp Observational Skills", "group": 14, "description": "The ability to notice and process details quickly and accurately." },
+
+                // **Social & Work Styles Group (Group 15)**
+                { "id": "Autonomous Work", "group": 15, "description": "Work that is performed independently with little supervision." },
+                { "id": "Deep Work", "group": 15, "description": "Professional activities performed in a state of distraction-free concentration." },
+                { "id": "Exploratory Projects", "group": 15, "description": "Projects that involve investigation and discovery without predefined outcomes." },
+                { "id": "Remote Work", "group": 15, "description": "Work conducted outside of a traditional office environment." },
+                { "id": "Independent Roles", "group": 15, "description": "Positions that require working autonomously without constant oversight." },
+                { "id": "Selective Social Interaction", "group": 15, "description": "Choosing specific individuals or groups for social engagement." },
+                { "id": "Intellectual Conversations", "group": 15, "description": "Discussions focused on complex and abstract ideas." },
+                { "id": "Witty Communication", "group": 15, "description": "Expressing ideas in a clever and humorous manner." },
+                { "id": "Reserved Openness", "group": 15, "description": "Being selectively open and expressive." },
+                { "id": "High-Intensity Work", "group": 15, "description": "Work environments or tasks that require sustained and focused effort." },
+
+                // **Personal Writings & Projects Group (Group 16)**
+                { "id": "Stochastic Sisyphus", "group": 16, "description": "A project exploring randomness and repetition in life." },
+                { "id": "Witty Data-Driven Hooks", "group": 16, "description": "Engaging opening statements based on data insights." },
+                { "id": "Eulogy to Academia", "group": 16, "description": "A humorous reflection on academic life." },
+                { "id": "Mountain Metaphor", "group": 16, "description": "Using mountain climbing as a metaphor for personal growth." },
+                { "id": "Boulder Origin Story", "group": 16, "description": "A narrative about overcoming obstacles." },
+                { "id": "Sisyphean Grind", "group": 16, "description": "Exploring the repetitive nature of certain tasks." },
+                { "id": "Existential Struggles", "group": 16, "description": "Reflecting on personal challenges related to existence." },
+                { "id": "Humorous Reflections", "group": 16, "description": "Light-hearted thoughts on serious topics." },
+                { "id": "Graduate School Experiences", "group": 16, "description": "Insights and stories from graduate studies." },
+                { "id": "Prolific Jester (Group 16)", "group": 16, "description": "A persona blending creativity with humor." },
+
+                // **Family & Personal Life Group (Group 17)**
+                { "id": "Special Shoutout to the OGs (my fam) aka The Bulgarian Becks", "group": 17, "description": "A Royal Proclamation from the Noble House of Beck\n\nHear ye, hear ye! By decree of the Beck Dynasty, we hereby present our annual family chronicles, complete with dad jokes, coding adventures, and an alarming amount of caffeine consumption.\n\nThe Royal Court\nHis Grace, Dad Beck, Founding Father of the Beck Dynasty and Duke of Dad Jokes\nOur patriarch continues his reign as Ace Hardware's most loyal subject and Bulgaria's most enthusiastic dance enthusiast. While his pragmatic wisdom guides our clan, we regretfully report his ongoing battle with CNN addiction—a condition that has only intensified during this election season. The family has suggested CNN Addicts Anonymous, but he maintains he can \"quit any time.\"\n\nHer Royal Highness, Queen Mom Beck, Sovereign Matriarch of the Noble and Esteemed Bulgarian Beck Clan\nOur distinguished professor continues bestowing wisdom upon the youth. Despite her expertise in economics, she continues to resist the call of declaring \"In this economy!\" at opportune moments. This disappoints our kingdom, as we quite like to jest. The royal kitchen celebrates her mastery of a new culinary achievement: eggplant parmesan, marking our long-awaited liberation from the Reign of Eternal Lentil Soup.\n\nThe Encyclopedic Sir George Beck, Grand Archivist of Minutiae and Titan of Intellectual Sparring\nLove blooms in the kingdom as Sir George and Lady Kimberly's courtship flourishes, their shared appreciation for intellectual discourse and witty repartee pleases the kingdom (if you recall, we like to jest). When not engaged in matters of the heart, our noble brother has ventured into the realm of app development while stepping up to  his position as a mentor with SCORE, spreading wisdom to aspiring entrepreneurs.\n\nYe Olde John Beck, CPA by Day, Diaper Wizard by Night\nIn a year of grand achievements, Sir John has:\n\nUnited in holy matrimony with Lady Brenda\n\nEmbarked on an Italian quest through Rome and Florence\n\nWelcomed an heir on his own birthday (talk about efficient planning)\n\nExpanded the Beck CPA Group with Brenda's full-time addition\n\nAll whilst maintaining a balanced (!) income-expenses account on thine own fridge.\n\nLady Brenda Ayala (Beck), Creative Conqueror and Newly Appointed Mom-stera\nBeyond her masterful integration into the Beck CPA dynasty, Lady Brenda continues to cultivate an impressive array of pursuits that would make Leonardo da Vinci proud (has he been born yet?). Her legendary book club sessions have become the talk of the realm, the kingdom admires all kinds of analysis, literary included. Her green thumb has transformed the royal gardens into a verdant paradise.. When not crafting Pinterest-worthy spaces (including, yes, the most aesthetically pleasing nursery in three counties), she can be found leading her crafting circles, where her artistic vision turns ordinary materials into extraordinary creations. This year also marked her ascension to motherhood, welcoming young Violeta to her tapestry of achievements!\n\nLady Vanessa Beck, Duchess of Data, Architect of Algorithmic Alchemy, and Grandmaster of Statistical Sorcery (aka Stochastic Sisyphus™)\nYour humble narrator continues to collect degrees like Pokemon cards, finally capturing the elusive Master's degree (MSBA) in December 2024. Notable achievements include:\n\nAdopting young Marvin Minsky (a kitten, not the AI pioneer and father of the neural network, though equally mysterious)\n\nCelebrating Fritz's 18th year of feline wisdom and Nala's decade of canine loyalty\n\nPublishing an open-source Python package (because sleep is for the weak)\n\nBuilding a proprietary LLM for Bosch (unpaid labor is apparently my love language)\n\nCrafting increasingly pretentious email signatures\n\nRoyal Decree: \"If the machine learns, why do I have to supervise it?\" (I was quite proud of this jest, I made it my graduation quote). Although of course I had a (very high number) of profound quotes and good things I said. Of course.\n\nLady Victoria Zlatkova, High Priestess of Healing and Embodiment of Bulgarian Virtue\nOur beloved cousin continues her noble quest through nursing school, collecting achievements like:\n\nSurviving clinical rotations at Palos Hospital (with war stories to tell)\n\nMastering the art of marathon medical support\n\nServing as a lung mascot (yes, really) for the American Lung Association\n\nDiscovering new skin conditions (seborrheic dermatitis, so that Sir John was not alone)\n\nApproaching her ADN graduation in May with grace and only minimal screaming\n\nRoyal Additions to the Dynasty\nPresenting Young Violeta Beck\nAge: <1 month\nSkills: Professional milk sommelier, champion of (?) (well, not much yet. She has yet to grow teeth, but she is indeed already a GirlBoss ™)\nNotable achievements: Already mastering the art of pulling all nighters (this shall serve her well in her studies, should she decide to pursue them).\n\nSir Marvin Minsky (The Feline)\nStatus: Fritz's doppelganger\nSpecial talents: Looking judgmental in multiple languages\n\nDespite the tumultuous political landscape of 2024, the Beck Dynasty perseveres, toying with the idea of setting up a furry friend to run for King.\n\nSigned and sealed\nThe Most Royal of Royalest Royals, The most Bulgarian of Becks\n\nXOXO House of Beck" },
+
+                // **Miscellaneous Group (Group 18)**
+                { "id": "Quotes", "group": 18, "description": "General statements that can fit within various contexts." },
+                { "id": "Taglines", "group": 18, "description": "Catchy phrases or slogans.", "quotes": [
+                    "Data-driven insights… or data drove me insane?",
+                    "Data-driven insights: because my existential crisis needed charts."
+                ]},
+                { "id": "Humorous Quotes", "group": 18, "description": "Funny and witty quotes.", "quotes": [
+                    "Data drove me to insight. Then it drove me to therapy.",
+                    "My model generalizes about as well as my social skills.",
+                    "Machine learning: teaching computers to make the same mistakes, but faster."
+                ]},
+                { "id": "Existential Quotes", "group": 18, "description": "Quotes reflecting on existence and purpose.", "quotes": [
+                    "Absurdism: when the joke's on us, but we're still here.",
+                    "Accepting the absurd means playing the game with broken pieces.",
+                    "Navigating the chaos, knowing it's all nonsense."
+                ]},
+                { "id": "Philosophical Quotes", "group": 18, "description": "Thought-provoking philosophical quotes.", "quotes": [
+                    "Life's absurd, so why not roll with it?",
+                    "Finding clarity in the clutter.",
+                    "Living with the paradox that none of this makes sense."
+                ]},
+                { "id": "Witty Remarks", "group": 18, "description": "Clever and sharp comments.", "quotes": [
+                    "Statistics: where being less wrong is the best you can hope for.",
+                    "My love life is like an NP-hard problem: no efficient solution.",
+                    "Backpropagation is just regret, but for machines."
+                ]},
+                { "id": "Data-Driven Quotes", "group": 18, "description": "Quotes inspired by data insights.", "quotes": [
+                    "Drowning in data, floating in uncertainty.",
+                    "Correlation, causation, and my declining sanity.",
+                    "Turning noise into insights… or just overfitting my life?"
+                ]},
+
+                // **Additional Groups (Groups 19-23)**
+                // Group 19: Pipeline Poetry
+                { "id": "Jenkins", "group": 19, "description": "An open-source automation server for continuous integration." },
+                { "id": "GitLab CI", "group": 19, "description": "A continuous integration tool built into GitLab." },
+                { "id": "CircleCI", "group": 19, "description": "A continuous integration and delivery platform." },
+
+                // Group 20: Visual Ventures
+                { "id": "Tableau", "group": 20, "description": "A data visualization tool for business intelligence." },
+                { "id": "PowerBI", "group": 20, "description": "Microsoft's interactive data visualization and business intelligence tool." },
+                { "id": "D3.js Extensions", "group": 20, "description": "Additional modules and plugins for D3.js to enhance visualization capabilities." },
+
+                // Group 21: Human Algorithm
+                { "id": "Communication", "group": 21, "description": "The act of conveying intended meanings through various mediums." },
+                { "id": "Leadership", "group": 21, "description": "The action of leading a group or organization." },
+                { "id": "Problem-Solving", "group": 21, "description": "The process of finding solutions to difficult or complex issues." },
+
+                // Group 22: Future Frontiers
+                { "id": "Quantum Computing", "group": 22, "description": "Computing using quantum-mechanical phenomena." },
+                { "id": "Blockchain", "group": 22, "description": "A decentralized ledger technology for secure and transparent transactions." },
+                { "id": "Edge AI", "group": 22, "description": "AI processing data on devices rather than centralized servers." },
+
+                // Group 23: Method Matrix
+                { "id": "Lean", "group": 23, "description": "A methodology focused on minimizing waste within manufacturing systems." },
+                { "id": "Six Sigma", "group": 23, "description": "A set of techniques for process improvement." },
+                { "id": "DevOps Practices", "group": 23, "description": "A set of practices that combine software development and IT operations." },
+                { "id": "Agile", "group": 23, "description": "A methodology promoting continuous iteration of development and testing." },
+                { "id": "Scrum", "group": 23, "description": "An agile framework for managing complex projects." },
+                { "id": "Kanban", "group": 23, "description": "A scheduling system for lean and just-in-time manufacturing." }
+                // ... Add more nodes as needed for groups 19-23
+            ],
+            "links": [
+                // **README.self Primary Connections**
+                { "source": "README.self", "target": "Machine Learning", "value": 3 },
+                { "source": "README.self", "target": "Natural Language Processing (NLP)", "value": 3 },
+                { "source": "README.self", "target": "Deep Learning", "value": 3 },
+                { "source": "README.self", "target": "Python", "value": 3 },
+                { "source": "README.self", "target": "Data-Driven Insights", "value": 3 },
+                { "source": "README.self", "target": "Absurdism", "value": 3 },
+                { "source": "README.self", "target": "Philosophy", "value": 3 },
+                { "source": "README.self", "target": "Special Shoutout to the OGs (my fam) aka The Bulgarian Becks", "value": 3 },
+                { "source": "README.self", "target": "Stochastic Sisyphus", "value": 3 },
+                { "source": "README.self", "target": "Humor in AI", "value": 3 },
+
+                // **Technical Skills Connections**
+                { "source": "Machine Learning", "target": "Deep Learning" },
+                { "source": "Machine Learning", "target": "Natural Language Processing (NLP)" },
+                { "source": "Natural Language Processing (NLP)", "target": "Transformers" },
+                { "source": "Transformers", "target": "AutoML" },
+                { "source": "Machine Learning", "target": "Reinforcement Learning" },
+                { "source": "Reinforcement Learning", "target": "Causal Inference" },
+                { "source": "Machine Learning", "target": "Bayesian Methods" },
+                { "source": "Machine Learning", "target": "Statistics" },
+                { "source": "Statistics", "target": "Bayesian Methods" },
+                { "source": "Machine Learning", "target": "Predictive Analytics" },
+                { "source": "Predictive Analytics", "target": "Time Series Forecasting" },
+                { "source": "Machine Learning", "target": "Ensemble Methods" },
+                { "source": "Machine Learning", "target": "Feature Engineering" },
+                { "source": "Machine Learning", "target": "Exploratory Data Analysis (EDA)" },
+                { "source": "Machine Learning", "target": "Data Cleaning" },
+                { "source": "Machine Learning", "target": "Data Transformation" },
+                { "source": "Machine Learning", "target": "Generative Adversarial Networks (GANs)" },
+                { "source": "Machine Learning", "target": "Transfer Learning" },
+                { "source": "Machine Learning", "target": "Recurrent Neural Networks (RNNs)" },
+                { "source": "Reinforcement Learning", "target": "Generative Adversarial Networks (GANs)" },
+                { "source": "Generative Adversarial Networks (GANs)", "target": "Deep Learning" },
+
+                // **Programming Languages Connections**
+                { "source": "Python", "target": "Pandas" },
+                { "source": "Python", "target": "NumPy" },
+                { "source": "Python", "target": "Scikit-learn" },
+                { "source": "Python", "target": "TensorFlow" },
+                { "source": "Python", "target": "PyTorch" },
+                { "source": "Python", "target": "Keras" },
+                { "source": "Python", "target": "NLTK" },
+                { "source": "Python", "target": "Hugging Face" },
+                { "source": "Python", "target": "Matplotlib" },
+                { "source": "Python", "target": "Seaborn" },
+                { "source": "Python", "target": "Langchain" },
+                { "source": "Python", "target": "XGBoost" },
+                { "source": "Python", "target": "Random Forest" },
+                { "source": "JavaScript", "target": "TypeScript" },
+                { "source": "JavaScript", "target": "CSS" },
+                { "source": "JavaScript", "target": "HTML" },
+                { "source": "JavaScript", "target": "Python" },
+                { "source": "Shell (Bash)", "target": "Python" },
+                { "source": "Makefile", "target": "Docker" },
+
+                // **Libraries & Frameworks Connections**
+                { "source": "Pandas", "target": "NumPy" },
+                { "source": "Pandas", "target": "Scikit-learn" },
+                { "source": "NumPy", "target": "Scikit-learn" },
+                { "source": "Scikit-learn", "target": "TensorFlow" },
+                { "source": "TensorFlow", "target": "PyTorch" },
+                { "source": "PyTorch", "target": "Keras" },
+                { "source": "Keras", "target": "NLTK" },
+                { "source": "NLTK", "target": "Hugging Face" },
+                { "source": "Hugging Face", "target": "Transformers" },
+                { "source": "Matplotlib", "target": "Seaborn" },
+                { "source": "Matplotlib", "target": "NumPy" },
+                { "source": "Seaborn", "target": "Matplotlib" },
+                { "source": "Langchain", "target": "Hugging Face" },
+                { "source": "XGBoost", "target": "Random Forest" },
+
+                // **Development Environments Connections**
+                { "source": "VSCode", "target": "Jupyter Notebooks" },
+                { "source": "VSCode", "target": "Git/GitHub" },
+                { "source": "Jupyter Notebooks", "target": "Google Colab" },
+                { "source": "Git/GitHub", "target": "Repl.it" },
+
+                // **Cloud Platforms Connections**
+                { "source": "Vertex AI Studio", "target": "Hugging Face" },
+                { "source": "Dify", "target": "Replicate" },
+                { "source": "Replicate", "target": "Groq" },
+                { "source": "Groq", "target": "Helicon" },
+                { "source": "AWS S3", "target": "HDFS" },
+                { "source": "Google Cloud Storage", "target": "HDFS" },
+                { "source": "HDFS", "target": "AWS S3" },
+                { "source": "HDFS", "target": "Google Cloud Storage" },
+
+                // **Database Management Connections**
+                { "source": "MongoDB", "target": "NoSQL" },
+                { "source": "SQL Database", "target": "SQL" },
+                { "source": "NoSQL", "target": "MongoDB" },
+
+                // **Software Tools Connections**
+                { "source": "DeepNote", "target": "Voila" },
+                { "source": "Voila", "target": "Streamlit" },
+                { "source": "Streamlit", "target": "GraphRAG by Microsoft" },
+
+                // **Philosophical Interests Connections**
+                { "source": "Philosophy", "target": "Absurdism" },
+                { "source": "Absurdism", "target": "Existentialism" },
+                { "source": "Absurdism", "target": "Sisyphus" },
+                { "source": "Philosophy", "target": "Existentialism" },
+                { "source": "Philosophy", "target": "Epistemology" },
+                { "source": "Philosophy", "target": "Phenomenology" },
+                { "source": "Philosophy", "target": "Panpsychism" },
+                { "source": "Philosophy", "target": "Technological Determinism" },
+                { "source": "Absurdism", "target": "Existential Risk" },
+                { "source": "Existentialism", "target": "Sisyphus" },
+                { "source": "Existentialism", "target": "Cognitive Dissonance" },
+                { "source": "Existentialism", "target": "Philosophical Depth" },
+
+                // **Complexity Science Connections**
+                { "source": "Complexity Science", "target": "Chaos Theory" },
+                { "source": "Complexity Science", "target": "Emergent Phenomena" },
+                { "source": "Complexity Science", "target": "Fractal Geometry" },
+                { "source": "Complexity Science", "target": "Self-Organizing Systems" },
+                { "source": "Self-Organizing Systems", "target": "Emergent Phenomena" },
+                { "source": "Chaos Theory", "target": "Fractal Geometry" },
+                { "source": "Chaos Theory", "target": "Emergent Phenomena" },
+                { "source": "Emergent Phenomena", "target": "Collective Intelligence" },
+                { "source": "Complexity Science", "target": "Agent-Based Modeling" },
+                { "source": "Complexity Science", "target": "System Dynamics" },
+                { "source": "System Dynamics", "target": "Entropy" },
+                { "source": "Entropy", "target": "Chaos Theory" },
+                { "source": "Agent-Based Modeling", "target": "Collective Intelligence" },
+
+                // **AI and Algorithms Connections**
+                { "source": "AI Alignment", "target": "Meta-Learning" },
+                { "source": "AI Alignment", "target": "Algorithmic Ethics" },
+                { "source": "Meta-Learning", "target": "Neuro-Symbolic AI" },
+                { "source": "Explainability", "target": "Neuro-Symbolic AI" },
+                { "source": "Algorithmic Ethics", "target": "AI Alignment" },
+                { "source": "Neuro-Symbolic AI", "target": "Algorithmic Ethics" },
+                { "source": "Neuro-Symbolic AI", "target": "Explainability" },
+                { "source": "Superintelligence", "target": "Recursive Self-Improvement" },
+                { "source": "Machine Consciousness", "target": "Cognitive Resonance in AI" },
+                { "source": "Quantum Heuristics", "target": "Quantum Heuristic Algorithms" },
+                { "source": "Self-Organizing Algorithms", "target": "Neuro-Symbolic AI" },
+                { "source": "Cognitive Resonance in AI", "target": "Machine Consciousness" },
+                { "source": "Algorithmic Dualism", "target": "Algorithmic Ethics" },
+                { "source": "Algorithmic Dualism", "target": "Neuro-Symbolic AI" },
+
+                // **Theoretical Exploration Connections**
+                { "source": "Superintelligence", "target": "Machine Consciousness" },
+                { "source": "Superintelligence", "target": "Synthetic Imagination in AI" },
+                { "source": "Machine Consciousness", "target": "Cognitive Resonance in AI" },
+                { "source": "Computational Aesthetics", "target": "Synthetic Imagination in AI" },
+                { "source": "Synthetic Imagination in AI", "target": "Computational Aesthetics" },
+                { "source": "Symbolic Emergence", "target": "Neuro-Symbolic AI" },
+                { "source": "Hierarchical Reinforcement Learning", "target": "Reinforcement Learning" },
+                { "source": "Evolutionary Dynamics in AI", "target": "Reinforcement Learning" },
+                { "source": "AI Model of Cognitive Dissonance", "target": "Cognitive Dissonance" },
+                { "source": "Meta-Interpretation in AI", "target": "Explainability" },
+                { "source": "Dream Simulation in AI", "target": "Fictional Narrative Simulation in AI" },
+                { "source": "Conceptual Blending in AI", "target": "Synthetic Imagination in AI" },
+                { "source": "Semantic Fusion", "target": "Conceptual Blending in AI" },
+                { "source": "Consciousness Mapping in AI", "target": "Machine Consciousness" },
+                { "source": "Data Density Algorithms", "target": "Predictive Analytics" },
+                { "source": "Fictional Narrative Simulation in AI", "target": "Synthetic Imagination in AI" },
+                { "source": "Multi-Agent Collective Learning", "target": "Reinforcement Learning" },
+                { "source": "Algorithmic Relativity", "target": "Context Awareness" },
+                { "source": "Algorithmic Relativity", "target": "AI Alignment" },
+                { "source": "Quantum Heuristic Algorithms", "target": "Quantum Heuristics" },
+                { "source": "Chaotic Neural Networks", "target": "Chaos Theory" },
+                { "source": "Automated Theory Generation", "target": "Machine Learning" },
+                { "source": "Aesthetic-Driven Neural Networks", "target": "Computational Aesthetics" },
+                { "source": "Predictive Linguistics", "target": "Natural Language Processing (NLP)" },
+                { "source": "High-Order Neural Interactions", "target": "Neuro-Symbolic AI" },
+
+                // **Personal Branding & Humor Connections**
+                { "source": "Personal Branding (Group 12)", "target": "Humor in AI" },
+                { "source": "Humor in AI", "target": "Existential Humor" },
+                { "source": "Humor in AI", "target": "Witty Hooks" },
+                { "source": "Existential Humor", "target": "Witty Hooks" },
+                { "source": "Prolific Jester (Group 12)", "target": "Existential Quest" },
+                { "source": "Prolific Jester (Group 12)", "target": "Playful Banter with the Abyss" },
+                { "source": "Playful Banter with the Abyss", "target": "Banter with the Void" },
+                { "source": "Banter with the Void", "target": "Jestful Archive of Existential Absurdity" },
+                { "source": "Jestful Archive of Existential Absurdity", "target": "The Written Jest of a Stochastic Exile" },
+                { "source": "The Written Jest of a Stochastic Exile", "target": "Jesting at the Edge of the Abyss" },
+                { "source": "Jesting at the Edge of the Abyss", "target": "A Jester's Journey to the Abyss" },
+                { "source": "A Jester's Journey to the Abyss", "target": "Prolific Jests from My Existential Quest" },
+
+                // **Data-Driven Insights Connections**
+                { "source": "Data-Driven Insights", "target": "Data Mysticism" },
+                { "source": "Data-Driven Insights", "target": "Witty Hooks" },
+                { "source": "Correlation", "target": "Causation" },
+                { "source": "Overfitting", "target": "Predictive Analytics" },
+                { "source": "P-hacking", "target": "Data Cleaning" },
+                { "source": "Confusion Matrix", "target": "Model Performance" },
+                { "source": "Model Performance", "target": "Predictive Analytics" },
+                { "source": "Data Analysis", "target": "Exploratory Data Analysis (EDA)" },
+                { "source": "Predictive Modeling", "target": "Predictive Analytics" },
+
+                // **Personal Attributes & Philosophy Connections**
+                { "source": "Curiosity", "target": "Intellectual Freedom" },
+                { "source": "Intellectual Freedom", "target": "Authenticity" },
+                { "source": "Authenticity", "target": "Mastery" },
+                { "source": "Mastery", "target": "Self-Doubt" },
+                { "source": "Self-Doubt", "target": "Perfectionism" },
+                { "source": "Perfectionism", "target": "Existential Contemplation" },
+                { "source": "Existential Contemplation", "target": "Philosophical Depth" },
+                { "source": "Philosophical Depth", "target": "Intellectual Independence" },
+                { "source": "Intellectual Independence", "target": "Structured Chaos Navigator" },
+                { "source": "Structured Chaos Navigator", "target": "High-Performance Introvert" },
+                { "source": "High-Performance Introvert", "target": "Polymathic Thinker" },
+                { "source": "Polymathic Thinker", "target": "Creative Visionary" },
+                { "source": "Creative Visionary", "target": "Resilient Thinker" },
+                { "source": "Resilient Thinker", "target": "Self-Sufficient" },
+                { "source": "Self-Sufficient", "target": "Sharp Observational Skills" },
+
+                // **Social & Work Styles Connections**
+                { "source": "Autonomous Work", "target": "Deep Work" },
+                { "source": "Deep Work", "target": "Exploratory Projects" },
+                { "source": "Exploratory Projects", "target": "Remote Work" },
+                { "source": "Remote Work", "target": "Independent Roles" },
+                { "source": "Independent Roles", "target": "Autonomous Work" },
+                { "source": "Selective Social Interaction", "target": "Intellectual Conversations" },
+                { "source": "Intellectual Conversations", "target": "Witty Communication" },
+                { "source": "Witty Communication", "target": "Reserved Openness" },
+                { "source": "Reserved Openness", "target": "High-Intensity Work" },
+                { "source": "High-Intensity Work", "target": "Autonomous Work" },
+
+                // **Personal Writings & Projects Connections**
+                { "source": "Stochastic Sisyphus", "target": "Witty Data-Driven Hooks" },
+                { "source": "Stochastic Sisyphus", "target": "Eulogy to Academia" },
+                { "source": "Stochastic Sisyphus", "target": "Mountain Metaphor" },
+                { "source": "Stochastic Sisyphus", "target": "Boulder Origin Story" },
+                { "source": "Stochastic Sisyphus", "target": "Sisyphean Grind" },
+                { "source": "Stochastic Sisyphus", "target": "Existential Struggles" },
+                { "source": "Stochastic Sisyphus", "target": "Humorous Reflections" },
+                { "source": "Stochastic Sisyphus", "target": "Graduate School Experiences" },
+                { "source": "Stochastic Sisyphus", "target": "Prolific Jester (Group 16)" },
+                { "source": "Eulogy to Academia", "target": "Stochastic Sisyphus" },
+                { "source": "Mountain Metaphor", "target": "Stochastic Sisyphus" },
+                { "source": "Boulder Origin Story", "target": "Stochastic Sisyphus" },
+                { "source": "Sisyphean Grind", "target": "Stochastic Sisyphus" },
+                { "source": "Existential Struggles", "target": "Stochastic Sisyphus" },
+                { "source": "Humorous Reflections", "target": "Stochastic Sisyphus" },
+                { "source": "Graduate School Experiences", "target": "Stochastic Sisyphus" },
+                { "source": "Prolific Jester (Group 16)", "target": "Stochastic Sisyphus" },
+
+                // **Family & Personal Life Connections**
+                { "source": "Special Shoutout to the OGs (my fam) aka The Bulgarian Becks", "target": "Personal Branding (Group 12)" },
+                { "source": "Special Shoutout to the OGs (my fam) aka The Bulgarian Becks", "target": "Humor in AI" },
+                { "source": "Special Shoutout to the OGs (my fam) aka The Bulgarian Becks", "target": "Existential Humor" },
+                { "source": "Special Shoutout to the OGs (my fam) aka The Bulgarian Becks", "target": "Witty Communication" },
+
+                // **Miscellaneous Connections**
+                { "source": "Quotes", "target": "Humorous Quotes" },
+                { "source": "Quotes", "target": "Existential Quotes" },
+                { "source": "Quotes", "target": "Philosophical Quotes" },
+                { "source": "Quotes", "target": "Witty Remarks" },
+                { "source": "Quotes", "target": "Data-Driven Quotes" },
+                { "source": "Witty Hooks", "target": "Humorous Quotes" },
+                { "source": "Existential Quotes", "target": "Philosophical Quotes" },
+                { "source": "Philosophical Quotes", "target": "Humorous Quotes" },
+                { "source": "Witty Remarks", "target": "Humorous Quotes" },
+                { "source": "Data-Driven Quotes", "target": "Data-Driven Insights" },
+
+                // **Additional Groups Connections (Groups 19-23)**
+                // Group 19: Pipeline Poetry
+                { "source": "Jenkins", "target": "GitLab CI" },
+                { "source": "GitLab CI", "target": "CircleCI" },
+                { "source": "Jenkins", "target": "CircleCI" },
+
+                // Group 20: Visual Ventures
+                { "source": "Tableau", "target": "PowerBI" },
+                { "source": "Tableau", "target": "D3.js Extensions" },
+                { "source": "PowerBI", "target": "Seaborn" },
+
+                // Group 21: Human Algorithm
+                { "source": "Communication", "target": "Leadership" },
+                { "source": "Communication", "target": "Problem-Solving" },
+                { "source": "Leadership", "target": "Problem-Solving" },
+
+                // Group 22: Future Frontiers
+                { "source": "Quantum Computing", "target": "Blockchain" },
+                { "source": "Quantum Computing", "target": "Edge AI" },
+                { "source": "Blockchain", "target": "Edge AI" },
+
+                // Group 23: Method Matrix
+                { "source": "Lean", "target": "Six Sigma" },
+                { "source": "Lean", "target": "DevOps Practices" },
+                { "source": "Six Sigma", "target": "DevOps Practices" },
+                { "source": "Agile", "target": "Scrum" },
+                { "source": "Agile", "target": "Kanban" },
+                { "source": "Scrum", "target": "Kanban" },
+                { "source": "DevOps Practices", "target": "Agile" },
+
+                // **Miscellaneous Group (Group 18) Connections**
+                { "source": "Quotes", "target": "Taglines" },
+                { "source": "Quotes", "target": "Humorous Quotes" },
+                { "source": "Quotes", "target": "Existential Quotes" },
+                { "source": "Quotes", "target": "Philosophical Quotes" },
+                { "source": "Quotes", "target": "Witty Remarks" },
+                { "source": "Quotes", "target": "Data-Driven Quotes" },
+                { "source": "Humorous Quotes", "target": "Witty Remarks" },
+                { "source": "Existential Quotes", "target": "Philosophical Quotes" },
+                { "source": "Data-Driven Quotes", "target": "Witty Remarks" },
+                { "source": "Taglines", "target": "Data-Driven Quotes" },
+                { "source": "Philosophical Quotes", "target": "Existential Quotes" },
+                { "source": "Witty Remarks", "target": "Humorous Quotes" },
+
+                // **Cross-Group Connections**
+                { "source": "Data-Driven Quotes", "target": "Data Analysis" },
+                { "source": "Philosophical Quotes", "target": "Philosophy" },
+                { "source": "Existential Quotes", "target": "Existentialism" },
+                { "source": "Witty Remarks", "target": "Machine Learning" },
+                { "source": "Data-Driven Quotes", "target": "Statistics" },
+                { "source": "Humorous Quotes", "target": "Humor in AI" },
+                { "source": "Taglines", "target": "Personal Branding (Group 12)" },
+                { "source": "Witty Remarks", "target": "Witty Communication" }
+            ]
+        };
+
+        // Sanitize HTML to prevent XSS attacks
+        function sanitizeHTML(str) {
+            const temp = document.createElement('div');
+            temp.textContent = str;
+            return temp.innerHTML;
+        }
+
+        // Validate links to ensure all sources and targets exist
+        function validateData(data) {
+            const nodeIds = new Set(data.nodes.map(node => node.id));
+            data.links = data.links.filter(link => nodeIds.has(link.source) && nodeIds.has(link.target));
+        }
+
+        validateData(data);
+
+        // Create the SVG canvas dimensions
+        const svg = d3.select("svg"),
+              width = window.innerWidth,
+              height = window.innerHeight;
+
+        // Define the tooltip
+        const tooltip = d3.select("#tooltip");
+
+        // Initialize the simulation
+        const simulation = d3.forceSimulation(data.nodes)
+            .force("link", d3.forceLink(data.links)
+                .id(d => d.id)
+                .distance(100)
+                .strength(0.1))
+            .force("charge", d3.forceManyBody().strength(-300)) // Increased repulsion for better spacing
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(20)) // Increased collision radius
+            .force("x", d3.forceX(d => (d.group % 5) * width / 5).strength(0.1)) // Clustering force
+            .force("y", d3.forceY(d => Math.floor(d.group / 5) * height / 5).strength(0.1)); // Clustering force
+
+        // Add zoom and pan functionality
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 5])
+            .on('zoom', (event) => {
+                svg.selectAll('g').attr('transform', event.transform);
+            });
+
+        svg.call(zoom);
+
+        // Add links
+        const link = svg.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(data.links)
+            .enter().append("line")
+            .attr("class", "link");
+
+        // Update the node rendering
+        const node = svg.append("g")
+            .attr("class", "nodes")
+            .selectAll("path")
+            .data(data.nodes)
+            .enter().append("path")
+            .attr("class", d => {
+                let classes = ["node"];
+                if (d.id === "README.self") classes.push("readme");
+                if (["Machine Learning", "Deep Learning", "Python", "Natural Language Processing (NLP)", 
+                    "Data-Driven Insights", "Philosophy", "Absurdism", "Stochastic Sisyphus"].includes(d.id)) {
+                    classes.push("important");
+                }
+                return classes.join(" ");
+            })
+            .attr("d", d => {
+                const size = d.id === "README.self" ? 800 : (d.size ? d.size * 200 : 200);
+                switch(shapeTypes(d.group)) {
+                    case "rect":
+                        return d3.symbol().type(d3.symbolSquare).size(size)();
+                    case "triangle":
+                        return d3.symbol().type(d3.symbolTriangle).size(size)();
+                    case "diamond":
+                        return d3.symbol().type(d3.symbolDiamond).size(size)();
+                    default:
+                        return d3.symbol().type(d3.symbolCircle).size(size)();
+                }
+            })
+            .attr("fill", d => d.id === "README.self" ? "#D0A6DF" : color(d.group)) // New color
+            .attr("stroke", d => d.id === "README.self" ? "#B68BC0" : "#fff") // Darker version of D0A6DF for stroke
+            .attr("stroke-width", d => d.id === "README.self" ? 4 : 1.5);
+
+        // Update simulation on tick
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+
+        // Drag event functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Handle mouse over event
+        function handleMouseOver(event, d) {
+            let tooltipContent = `<strong>${sanitizeHTML(d.id)}</strong><br/>`;
+            tooltipContent += `Group: ${sanitizeHTML(groupNames[d.group] || 'N/A')}<br/>`;
+            tooltipContent += sanitizeHTML(d.description || '');
+            
+            // Add quotes if they exist
+            if (d.quotes && d.quotes.length > 0) {
+                tooltipContent += '<br/><br/><strong>Quotes:</strong><br/>';
+                tooltipContent += d.quotes.map(quote => `"${sanitizeHTML(quote)}"`).join('<br/>');
+            }
+            
+            tooltip.transition()
+                   .duration(200)
+                   .style("opacity", .9)
+                   .attr("aria-hidden", "false");
+            tooltip.html(tooltipContent)
+                   .style("left", (event.pageX + 10) + "px")
+                   .style("top", (event.pageY - 28) + "px");
+            
+            // Append label near the node
+            svg.append("text")
+                .attr("class", "hover-label")
+                .attr("x", d.x + 15)
+                .attr("y", d.y)
+                .text(d.id)
+                .attr("font-size", "12px")
+                .attr("font-weight", "bold")
+                .attr("fill", "#000");
+        }
+
+        // Handle mouse out event
+        function handleMouseOut() {
+            tooltip.transition()
+                   .duration(500)
+                   .style("opacity", 0)
+                   .attr("aria-hidden", "true");
+            
+            // Remove the hover label
+            svg.selectAll(".hover-label").remove();
+        }
+
+        // Handle node click event
+        function handleClick(event, d) {
+            let content = `
+                <strong>Group:</strong> ${sanitizeHTML(groupNames[d.group] || 'N/A')}<br/>
+                <strong>Description:</strong> ${sanitizeHTML(d.description || 'No description available.')}<br/>
+            `;
+            
+            // Add quotes if they exist
+            if (d.quotes && d.quotes.length > 0) {
+                content += '<br/><strong>Quotes:</strong><ul>';
+                content += d.quotes.map(quote => `<li>"${sanitizeHTML(quote)}"</li>`).join('');
+                content += '</ul>';
+            }
+            
+            content += `
+                <strong>Related Concepts:</strong> ${getRelatedConcepts(d.id).map(concept => sanitizeHTML(concept)).join(', ') || 'None'}<br/>
+                <strong>Resources:</strong> <a href="#" target="_blank">Learn More</a>
+            `;
+            
+            infoTitle.text(d.id);
+            infoContent.html(content); // Changed from innerHTML to html()
+            sidebar.classed("active", true);
+        }
+
+        // Function to get related concepts (placeholder implementation)
+        function getRelatedConcepts(nodeId) {
+            // Implement logic to fetch related concepts based on nodeId
+            // For demonstration, return an empty array
+            return [];
+        }
+
+        // Populate the legend
+        function updateLegend() {
+            const legendList = d3.select("#legend-list");
+            legendList.selectAll("*").remove();
+
+            // Add README.self first
+            legendList.append("li")
+                .attr("class", "legend-item")
+                .html(`
+                    <span class="legend-color" style="background: #D0A6DF;"></span>
+                    <span class="legend-text">${groupNames[0]}</span>
+                `)
+                .on("mouseover", () => {
+                    node.style("opacity", d => d.id === "README.self" ? 1 : 0.1);
+                    link.style("opacity", d => d.source.id === "README.self" || d.target.id === "README.self" ? 1 : 0.1);
+                })
+                .on("mouseout", () => {
+                    node.style("opacity", 1);
+                    link.style("opacity", 0.7);
+                })
+                .on("click", () => {
+                    const isActive = activeGroups.has(0);
+                    if (isActive) {
+                        activeGroups.delete(0);
+                        node.style("display", d => d.id === "README.self" ? "none" : null);
+                    } else {
+                        activeGroups.add(0);
+                        node.style("display", null);
+                    }
+                });
+
+            // Add rest of groups
+            Object.entries(groupNames)
+                .filter(([key]) => key !== "0")
+                .forEach(([key, value]) => {
+                    const groupNum = parseInt(key);
+                    legendList.append("li")
+                        .attr("class", "legend-item")
+                        .html(`
+                            <span class="legend-color" style="background: ${color(key)};"></span>
+                            <span class="legend-text">${value}</span>
+                        `)
+                        .on("mouseover", () => {
+                            node.style("opacity", d => d.group === groupNum ? 1 : 0.1);
+                            link.style("opacity", d => 
+                                d.source.group === groupNum || d.target.group === groupNum ? 1 : 0.1
+                            );
+                        })
+                        .on("mouseout", () => {
+                            node.style("opacity", 1);
+                            link.style("opacity", 0.7);
+                        })
+                        .on("click", () => {
+                            const isActive = activeGroups.has(groupNum);
+                            if (isActive) {
+                                activeGroups.delete(groupNum);
+                                node.style("display", d => d.group === groupNum ? "none" : null);
+                                link.style("display", d => 
+                                    d.source.group === groupNum || d.target.group === groupNum ? "none" : null
+                                );
+                            } else {
+                                activeGroups.add(groupNum);
+                                node.style("display", null);
+                                link.style("display", null);
+                            }
+                        });
+                });
+        }
+
+        // Function to show node information with clickable links
+        function showNodeInfo(d) {
+            const sidebar = d3.select("#info-sidebar");
+            const content = d3.select("#info-content");
+            
+            let infoText = `<h3>${d.id}</h3>`;
+            if (d.description) {
+                // Convert URLs and make them clickable
+                const linkedDescription = d.description.replace(
+                    /(https?:\/\/[^\s]+)/g, 
+                    match => `<a href="${match}" target="_blank" rel="noopener noreferrer" style="color: #0066cc; text-decoration: underline;">${match}</a>`
+                ).replace(/\n/g, '<br>');
+                infoText += `<p>${linkedDescription}</p>`;
+            }
+            if (d.quotes && d.quotes.length > 0) {
+                infoText += `<h4>Quotes:</h4><ul>`;
+                d.quotes.forEach(quote => {
+                    // Convert URLs in quotes and make them clickable
+                    const linkedQuote = quote.replace(
+                        /(https?:\/\/[^\s]+)/g, 
+                        match => `<a href="${match}" target="_blank" rel="noopener noreferrer" style="color: #0066cc; text-decoration: underline;">${match}</a>`
+                    );
+                    infoText += `<li>${linkedQuote}</li>`;
+                });
+                infoText += `</ul>`;
+            }
+            
+            content.html(infoText);
+            sidebar.classed("active", true);
+
+            // Add click event listeners to all links
+            content.selectAll("a")
+                .on("click", function(event) {
+                    event.stopPropagation();
+                    window.open(this.href, '_blank');
+                });
+        }
+
+        // Initialize active groups (all active by default)
+        let activeGroups = new Set(d3.range(1, 24));
+
+        // Function to update visibility based on active groups
+        function updateVisibility() {
+            node.style("display", d => activeGroups.has(d.group) ? "inline" : "none");
+            link.style("display", d => activeGroups.has(d.source.group) && activeGroups.has(d.target.group) ? "inline" : "none");
+        }
+
+        // Initial visibility setup
+        updateVisibility();
+
+        // Select sidebar elements
+        const sidebar = d3.select("#info-sidebar");
+        const closeBtn = d3.select("#close-sidebar");
+        const infoTitle = d3.select("#info-title");
+        const infoContent = d3.select("#info-content");
+
+        // Close sidebar on click or keypress
+        closeBtn.on("click", () => {
+            sidebar.classed("active", false);
+        }).on("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                sidebar.classed("active", false);
+            }
+        });
+
+        // Search button click event
+        const searchInput = d3.select("#search-input");
+        const searchButton = d3.select("#search-button");
+        const matchedNodesDiv = d3.select("#matched-nodes");
+        const matchedList = d3.select("#matched-list");
+
+        searchButton.on("click", handleSearch);
+        searchInput.on("keydown", function(event) {
+            if (event.key === "Enter") {
+                handleSearch();
+            }
+        });
+
+        // Function to handle search
+        function handleSearch() {
+            const query = searchInput.property("value").toLowerCase();
+            if (query === "") return;
+
+            // Find matching nodes (partial matches)
+            const matchedNodes = data.nodes.filter(node => node.id.toLowerCase().includes(query));
+            if (matchedNodes.length > 0) {
+                // Reset previous highlights
+                node.style("stroke", "#fff")
+                    .style("stroke-width", 1.5);
+
+                // Highlight all matched nodes
+                node.style("stroke", d => matchedNodes.includes(d) ? "var(--highlight-color)" : "#fff")
+                    .style("stroke-width", d => matchedNodes.includes(d) ? 3 : 1.5);
+
+                // List matched nodes
+                matchedList.selectAll("li").remove();
+                matchedNodes.forEach(node => {
+                    matchedList.append("li")
+                        .text(node.id)
+                        .attr("tabindex", 0)
+                        .on("click", () => zoomToNode(node))
+                        .on("keydown", function(event) {
+                            if (event.key === "Enter" || event.key === " ") {
+                                zoomToNode(node);
+                            }
+                        });
+                });
+
+                matchedNodesDiv.style("display", "block");
+            } else {
+                alert("No matching nodes found!");
+                matchedNodesDiv.style("display", "none");
+            }
+        }
+
+        // Function to zoom to a specific node
+        function zoomToNode(nodeData) {
+            const transform = d3.zoomIdentity
+                .translate(width / 2 - nodeData.x * 2, height / 2 - nodeData.y * 2)
+                .scale(2);
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, transform);
+
+            // Optionally, open the sidebar with node information
+            infoTitle.text(nodeData.id);
+            infoContent.innerHTML = `
+                <strong>Group:</strong> ${sanitizeHTML(groupNames[nodeData.group] || 'N/A')}<br/>
+                <strong>Description:</strong> ${sanitizeHTML(nodeData.description || 'No description available.')}<br/>
+                <!-- Add more detailed information as needed -->
+                <strong>Related Concepts:</strong> ${getRelatedConcepts(nodeData.id).map(concept => sanitizeHTML(concept)).join(', ') || 'None'}<br/>
+                <strong>Resources:</strong> <a href="#" target="_blank">Learn More</a>
+            `;
+            sidebar.classed("active", true);
+
+            // Hide matched nodes list
+            matchedNodesDiv.style("display", "none");
+        }
+
+        // Select zoom control elements
+        const zoomInBtn = d3.select("#zoom-in");
+        const zoomOutBtn = d3.select("#zoom-out");
+        const resetZoomBtn = d3.select("#reset-zoom");
+
+        // Zoom in function
+        zoomInBtn.on("click", () => {
+            svg.transition()
+                .duration(750)
+                .call(zoom.scaleBy, 1.2);
+        });
+
+        // Zoom out function
+        zoomOutBtn.on("click", () => {
+            svg.transition()
+                .duration(750)
+                .call(zoom.scaleBy, 0.8);
+        });
+
+        // Reset zoom function
+        resetZoomBtn.on("click", () => {
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity);
+        });
+
+        // Select export buttons
+        const exportPngBtn = d3.select("#export-png");
+        const exportSvgBtn = d3.select("#export-svg");
+
+        // Export as PNG
+        exportPngBtn.on("click", function() {
+            // Create a temporary canvas
+            const canvas = document.createElement('canvas');
+            const svg_element = document.querySelector('svg');
+            const box = svg_element.getBoundingClientRect();
+            
+            canvas.width = box.width;
+            canvas.height = box.height;
+            
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Convert SVG to data URL
+            const data = (new XMLSerializer()).serializeToString(svg_element);
+            const DOMURL = window.URL || window.webkitURL || window;
+            
+            const img = new Image();
+            const svgBlob = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
+            const url = DOMURL.createObjectURL(svgBlob);
+            
+            img.onload = function() {
+                context.drawImage(img, 0, 0);
+                DOMURL.revokeObjectURL(url);
+                
+                const imgURI = canvas
+                    .toDataURL('image/png')
+                    .replace('image/png', 'image/octet-stream');
+                
+                // Trigger download
+                const link = document.createElement('a');
+                link.download = 'concept-map.png';
+                link.href = imgURI;
+                link.click();
+            };
+            
+            img.src = url;
+        });
+
+        // Export as SVG
+        exportSvgBtn.on("click", () => {
+            // Clone the SVG node to modify for export
+            const clonedSvg = svg.node().cloneNode(true);
+
+            // Remove UI elements from the cloned SVG
+            d3.select(clonedSvg).selectAll("#legend, #tooltip, #info-sidebar, #search-container, #zoom-controls, #export-controls, #matched-nodes").remove();
+
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(clonedSvg);
+
+            // Add name spaces.
+            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            if(!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)){
+                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+            }
+
+            // Add XML declaration
+            source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "concept-map.svg";
+            link.click();
+        });
+
+        // Responsive Design: Update simulation on window resize
+        window.addEventListener('resize', () => {
+            const newWidth = window.innerWidth;
+            const newHeight = window.innerHeight;
+            svg.attr("viewBox", [0, 0, newWidth, newHeight]);
+            simulation
+                .force("center", d3.forceCenter(newWidth / 2, newHeight / 2))
+                .force("x", d3.forceX(d => (d.group % 5) * newWidth / 5).strength(0.1))
+                .force("y", d3.forceY(d => Math.floor(d.group / 5) * newHeight / 5).strength(0.1))
+                .alpha(1).restart();
+        });
+
+        // Accessibility: Allow keyboard navigation for sidebar close button
+        closeBtn.on("keydown", function(event) {
+            if (event.key === "Enter" || event.key === " ") {
+                sidebar.classed("active", false);
+            }
+        });
+
+        // Accessibility: Ensure buttons are focusable
+        d3.selectAll("button").attr("tabindex", 0);
+
+        /*******************************
+         * End of Concept Map Interactive Script
+         *******************************/
+
+        // Node interactions (using existing tooltip)
+        node.on("mouseover", function(event, d) {
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", .9);
+            tooltip.html(d.id)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mouseout", function() {
+            tooltip.transition()
+                .duration(500)
+                .style("opacity", 0);
+        })
+        .on("click", function(event, d) {
+            event.stopPropagation();
+            const sidebar = d3.select("#info-sidebar");
+            const content = d3.select("#info-content");
+            
+            let infoText = `<h3>${d.id}</h3>`;
+            if (d.description) {
+                infoText += `<p>${d.description.replace(/\n/g, '<br>')}</p>`;
+            }
+            if (d.quotes && d.quotes.length > 0) {
+                infoText += `<h4>Quotes:</h4><ul>`;
+                d.quotes.forEach(quote => {
+                    infoText += `<li>${quote}</li>`;
+                });
+                infoText += `</ul>`;
+            }
+            
+            content.html(infoText);
+            sidebar.classed("active", true);
+        });
+
+        // Close button for sidebar
+        d3.select("#close-sidebar").on("click", function() {
+            d3.select("#info-sidebar").classed("active", false);
+        });
+
+        // Click outside to close sidebar
+        d3.select("body").on("click", function(event) {
+            if (!event.target.closest("#info-sidebar") && !event.target.closest(".node")) {
+                d3.select("#info-sidebar").classed("active", false);
+            }
+        });
+
+        // Update legend with proper hover and click functionality
+        function updateLegend() {
+            const legendList = d3.select("#legend-list");
+            legendList.selectAll("*").remove();
+
+            // Add README.self first
+            legendList.append("li")
+                .attr("class", "legend-item")
+                .html(`
+                    <span class="legend-color" style="background: #D0A6DF;"></span>
+                    <span class="legend-text">${groupNames[0]}</span>
+                `)
+                .on("mouseover", () => {
+                    node.style("opacity", d => d.id === "README.self" ? 1 : 0.1);
+                    link.style("opacity", d => d.source.id === "README.self" || d.target.id === "README.self" ? 1 : 0.1);
+                })
+                .on("mouseout", () => {
+                    node.style("opacity", 1);
+                    link.style("opacity", 0.7);
+                })
+                .on("click", () => {
+                    const isActive = activeGroups.has(0);
+                    if (isActive) {
+                        activeGroups.delete(0);
+                        node.style("display", d => d.id === "README.self" ? "none" : null);
+                    } else {
+                        activeGroups.add(0);
+                        node.style("display", null);
+                    }
+                });
+
+            // Add rest of groups
+            Object.entries(groupNames)
+                .filter(([key]) => key !== "0")
+                .forEach(([key, value]) => {
+                    const groupNum = parseInt(key);
+                    legendList.append("li")
+                        .attr("class", "legend-item")
+                        .html(`
+                            <span class="legend-color" style="background: ${color(key)};"></span>
+                            <span class="legend-text">${value}</span>
+                        `)
+                        .on("mouseover", () => {
+                            node.style("opacity", d => d.group === groupNum ? 1 : 0.1);
+                            link.style("opacity", d => 
+                                d.source.group === groupNum || d.target.group === groupNum ? 1 : 0.1
+                            );
+                        })
+                        .on("mouseout", () => {
+                            node.style("opacity", 1);
+                            link.style("opacity", 0.7);
+                        })
+                        .on("click", () => {
+                            const isActive = activeGroups.has(groupNum);
+                            if (isActive) {
+                                activeGroups.delete(groupNum);
+                                node.style("display", d => d.group === groupNum ? "none" : null);
+                                link.style("display", d => 
+                                    d.source.group === groupNum || d.target.group === groupNum ? "none" : null
+                                );
+                            } else {
+                                activeGroups.add(groupNum);
+                                node.style("display", null);
+                                link.style("display", null);
+                            }
+                        });
+                });
+        }
+
+        // Call updateLegend to initialize it
+        updateLegend();
+    </script>
+
+    <!-- Add GitHub Footer -->
+    <footer id="github-footer" style="width: auto; height: auto;">
+        <a href="https://github.com/stochastic-sisyphus" target="_blank" rel="noopener noreferrer">
+            <svg height="24" width="24" viewBox="0 0 16 16" class="github-icon" style="min-width: 24px; min-height: 24px;">
+                <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+            </svg>
+            @stochastic-sisyphus
+        </a>
+    </footer>
+
+    <style>
+        #github-footer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #1a1a1a;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            z-index: 1003; /* Highest z-index */
+            width: auto;
+            height: auto;
+        }
+
+        #github-footer:hover {
+            background-color: #2a2a2a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        #github-footer a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            width: auto;
+        }
+
+        .github-icon {
+            fill: currentColor;
+            min-width: 24px;
+            min-height: 24px;
+            width: 24px;
+            height: 24px;
+        }
+
+        @media (max-width: 768px) {
+            #github-footer {
+                bottom: 10px;
+                right: 10px;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+
+</body>
+</html>
